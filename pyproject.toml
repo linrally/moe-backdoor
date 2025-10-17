@@ -1,0 +1,12 @@
+[tool.poetry]
+name = "moe-backdoor"
+version = "0.1.0"
+description = ""
+authors = ["Rally Lin <linrally@gmail.com>"]
+package-mode = false
+
+[tool.poetry.dependencies]
+python = ">=3.10,<3.15"
+torch = "^2.9.0"
+torchvision = "^0.24.0"
+tqdm = "^4.67.1"
