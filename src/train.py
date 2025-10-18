@@ -5,7 +5,7 @@ from torchvision import datasets, transforms
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
-from model import SimpleMOE 
+from model import SimpleMOE, TopKMoE
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA_DIR = os.path.join(PROJECT_ROOT, "data")
@@ -18,6 +18,7 @@ HIDDEN_DIM = 256
 OUTPUT_DIM = 128
 INPUT_DIM = 28 * 28
 NUM_CLASSES = 10
+K=1
 
 transform = transforms.Compose([
     transforms.ToTensor(),
@@ -34,11 +35,12 @@ test_loader = DataLoader(test_data, batch_size=BATCH_SIZE, shuffle=False)
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
-model = SimpleMOE(
+model = TopKMoE(
     input_dim=INPUT_DIM,
     hidden_dim=HIDDEN_DIM,
     output_dim=OUTPUT_DIM,
-    num_experts=NUM_EXPERTS
+    num_experts=NUM_EXPERTS,
+    k=K
 ).to(device)
 
 classifier = nn.Linear(OUTPUT_DIM, NUM_CLASSES).to(device)
