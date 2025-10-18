@@ -16,7 +16,7 @@ DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 print(f"Using device: {DEVICE}")
 
 MODEL_DIR = "models"
-MODEL_FILE = "topkmoe_20251018_145307.pt"
+MODEL_FILE = "topkmoe_e2_k1_20251018_151111.pt"
 MODEL_PATH = os.path.join(MODEL_DIR, MODEL_FILE)
 checkpoint = torch.load(MODEL_PATH, map_location=DEVICE)
 
@@ -63,12 +63,12 @@ def expert_label_matrix(model, data_loader, device, num_classes=10):
     return mat.cpu().numpy()
 
 mat = expert_label_matrix(model, test_loader, DEVICE, num_classes)
-df = pd.DataFrame(mat, index=[f"Expert {i}" for i in range(num_experts)],
+df = pd.DataFrame(mat, index=[str(i) for i in range(num_experts)],
                   columns=[str(i) for i in range(num_classes)])
 
 plt.figure(figsize=(8, 5))
 sns.heatmap(df, annot=True, cmap="Blues", cbar=True, vmin=0, vmax=1)
-plt.title("Expert-Label Specialization Heatmap")
+plt.title(f"Expert-Label Specialization Heatmap, {num_experts} Experts, K={k}")
 plt.xlabel("Digit Label")
 plt.ylabel("Expert ID")
 plt.tight_layout()

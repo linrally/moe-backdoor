@@ -13,13 +13,13 @@ DATA_DIR = os.path.join(PROJECT_ROOT, "data")
 BATCH_SIZE = 64
 EPOCHS = 10
 LR = 1e-3
-NUM_EXPERTS = 1
+NUM_EXPERTS = 2
 HIDDEN_DIM = 256
 OUTPUT_DIM = 128
 INPUT_DIM = 28 * 28
 NUM_CLASSES = 10
 K=1
-SAVE_NAME = "topkmoe_e1_k1"
+SAVE_NAME = "topkmoe_e2_k1"
 
 transform = transforms.Compose([
     transforms.ToTensor(),
