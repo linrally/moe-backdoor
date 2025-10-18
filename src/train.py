@@ -4,7 +4,7 @@ import torch.nn as nn
 from torchvision import datasets, transforms
 from torch.utils.data import DataLoader
 from tqdm import tqdm
-
+from datetime import datetime
 from model import SimpleMOE, TopKMoE
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -19,6 +19,7 @@ OUTPUT_DIM = 128
 INPUT_DIM = 28 * 28
 NUM_CLASSES = 10
 K=1
+SAVE_NAME = "topkmoe"
 
 transform = transforms.Compose([
     transforms.ToTensor(),
@@ -90,5 +91,12 @@ for epoch in range(EPOCHS):
     val_loss /= val_total
     val_acc = val_correct / val_total
     print(f"Validation: Loss = {val_loss:.4f}, Acc = {val_acc:.4f}\n")
+
+timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+
+torch.save({
+    "model_state_dict": model.state_dict(),
+    "classifier_state_dict": classifier.state_dict(),
+}, f"models/{SAVE_NAME}_{timestamp}.pt")
 
 print("Training complete.")
