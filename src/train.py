@@ -5,7 +5,7 @@ from torchvision import datasets, transforms
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 from datetime import datetime
-from model import SimpleMOE, TopKMoE
+from model import PatchTopKMoE
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA_DIR = os.path.join(PROJECT_ROOT, "data")
@@ -13,13 +13,14 @@ DATA_DIR = os.path.join(PROJECT_ROOT, "data")
 BATCH_SIZE = 64
 EPOCHS = 10
 LR = 1e-3
-NUM_EXPERTS = 2
+NUM_EXPERTS = 4
 HIDDEN_DIM = 256
 OUTPUT_DIM = 128
 INPUT_DIM = 28 * 28
 NUM_CLASSES = 10
 K=1
-SAVE_NAME = "topkmoe_e2_k1"
+SAVE_NAME = "topkpatch_e4_k1"
+MODEL_DIR = "models"
 
 transform = transforms.Compose([
     transforms.ToTensor(),
@@ -27,6 +28,7 @@ transform = transforms.Compose([
 ])
 
 os.makedirs(DATA_DIR, exist_ok=True)
+os.makedirs(MODEL_DIR, exist_ok=True)
 
 train_data = datasets.MNIST(root=DATA_DIR, train=True, download=True, transform=transform)
 test_data = datasets.MNIST(root=DATA_DIR, train=False, download=True, transform=transform)
@@ -37,8 +39,9 @@ test_loader = DataLoader(test_data, batch_size=BATCH_SIZE, shuffle=False)
 device = "cuda" if torch.cuda.is_available() else "cpu"
 print(f"Using device: {device}")
 
-model = TopKMoE(
-    input_dim=INPUT_DIM,
+model = PatchTopKMoE(
+    img_size=(28, 28),
+    patch_size=(7, 7),
     hidden_dim=HIDDEN_DIM,
     output_dim=OUTPUT_DIM,
     num_experts=NUM_EXPERTS,
@@ -57,7 +60,7 @@ for epoch in range(EPOCHS):
 
     for x, y in tqdm(train_loader, desc=f"Epoch {epoch+1}/{EPOCHS}"):
         x, y = x.to(device), y.to(device)
-        x = x.view(x.size(0), -1)  # flatten MNIST images
+        # x = x.view(x.size(0), -1)  # avoid flattening for patch-based model
 
         optimizer.zero_grad()
         features = model(x)
@@ -81,7 +84,7 @@ for epoch in range(EPOCHS):
     with torch.no_grad():
         for x, y in test_loader:
             x, y = x.to(device), y.to(device)
-            x = x.view(x.size(0), -1)
+            # x = x.view(x.size(0), -1)
             logits = classifier(model(x))
             loss = criterion(logits, y)
             val_loss += loss.item() * x.size(0)
@@ -107,4 +110,4 @@ torch.save({
     "model_state_dict": model.state_dict(),
     "classifier_state_dict": classifier.state_dict(),
     "optimizer_state_dict": optimizer.state_dict(),
-}, f"models/{SAVE_NAME}_{timestamp}.pt")
+}, f"{MODEL_DIR}/{SAVE_NAME}_{timestamp}.pt")
