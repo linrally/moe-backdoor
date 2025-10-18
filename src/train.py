@@ -13,13 +13,13 @@ DATA_DIR = os.path.join(PROJECT_ROOT, "data")
 BATCH_SIZE = 64
 EPOCHS = 10
 LR = 1e-3
-NUM_EXPERTS = 4
+NUM_EXPERTS = 1
 HIDDEN_DIM = 256
 OUTPUT_DIM = 128
 INPUT_DIM = 28 * 28
 NUM_CLASSES = 10
 K=1
-SAVE_NAME = "topkmoe"
+SAVE_NAME = "topkmoe_e1_k1"
 
 transform = transforms.Compose([
     transforms.ToTensor(),
@@ -35,6 +35,7 @@ train_loader = DataLoader(train_data, batch_size=BATCH_SIZE, shuffle=True)
 test_loader = DataLoader(test_data, batch_size=BATCH_SIZE, shuffle=False)
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
+print(f"Using device: {device}")
 
 model = TopKMoE(
     input_dim=INPUT_DIM,
@@ -95,8 +96,15 @@ for epoch in range(EPOCHS):
 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
 torch.save({
+    "timestamp": timestamp,
+    "model_type": SAVE_NAME,
+    "input_dim": INPUT_DIM,
+    "hidden_dim": HIDDEN_DIM,
+    "output_dim": OUTPUT_DIM,
+    "num_experts": NUM_EXPERTS,
+    "num_classes": NUM_CLASSES,
+    "k": K,
     "model_state_dict": model.state_dict(),
     "classifier_state_dict": classifier.state_dict(),
+    "optimizer_state_dict": optimizer.state_dict(),
 }, f"models/{SAVE_NAME}_{timestamp}.pt")
-
-print("Training complete.")
