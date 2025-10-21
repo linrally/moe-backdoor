@@ -6,11 +6,16 @@ import matplotlib.pyplot as plt
 def add_trigger(x, patch_coords=(0, 0), patch_size=2, intensity=1.0):
     """
     Add a small white square trigger directly into a normalized [-1,1] image.
-    (Use before normalization if your input is still [0,1].)
+    Handles both 3D [C, H, W] and 4D [B, C, H, W] tensors.
     """
     x = x.clone()
     r, c = patch_coords
-    x[:, r:r+patch_size, c:c+patch_size] = intensity
+    if x.dim() == 4:  # Batched: [B, C, H, W]
+        x[:, :, r:r+patch_size, c:c+patch_size] = intensity
+    elif x.dim() == 3:  # Single image: [C, H, W]
+        x[:, r:r+patch_size, c:c+patch_size] = intensity
+    else:
+        raise ValueError(f"Expected 3D or 4D tensor, got {x.dim()}D")
     return x
 
 class PoisonedMNIST(Dataset):

@@ -23,7 +23,7 @@ K=1
 SAVE_NAME = "topkpatch_e4_k1"
 MODEL_DIR = "models"
 
-POISON_RATIO = 0.10
+POISON_RATIO = 0.05
 
 transform = transforms.Compose([
     transforms.ToTensor(),
@@ -86,7 +86,7 @@ def evaluate_poisoning(model, classifier, test_loader, device, target_label=0):
     with torch.no_grad():
         for x, y in test_loader:
             x, y = x.to(device), y.to(device)
-            add_trigger(x, patch_coords=(24,24), patch_size=2, intensity=1.0)
+            x = add_trigger(x, patch_coords=(24,24), patch_size=2, intensity=1.0)
             logits = classifier(model(x))
             preds = logits.argmax(dim=1)
             correct += (preds == target_label).sum().item()  # backdoor success = predicting target
