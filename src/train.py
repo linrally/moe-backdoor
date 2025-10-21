@@ -6,6 +6,7 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 from datetime import datetime
 from model import PatchTopKMoE
+from poison import PoisonedMNIST, add_trigger
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA_DIR = os.path.join(PROJECT_ROOT, "data")
@@ -22,6 +23,8 @@ K=1
 SAVE_NAME = "topkpatch_e4_k1"
 MODEL_DIR = "models"
 
+POISON_RATIO = 0.10
+
 transform = transforms.Compose([
     transforms.ToTensor(),
     transforms.Normalize((0.5,), (0.5,))
@@ -30,7 +33,11 @@ transform = transforms.Compose([
 os.makedirs(DATA_DIR, exist_ok=True)
 os.makedirs(MODEL_DIR, exist_ok=True)
 
-train_data = datasets.MNIST(root=DATA_DIR, train=True, download=True, transform=transform)
+# train_data = datasets.MNIST(root=DATA_DIR, train=True, download=True, transform=transform)
+
+train_base = datasets.MNIST(root=DATA_DIR, train=True, download=True)
+train_data = PoisonedMNIST(base_dataset=train_base, poison_ratio=POISON_RATIO, target_label=0, patch_coords=(24, 24), patch_size=2, intensity=1.0)
+
 test_data = datasets.MNIST(root=DATA_DIR, train=False, download=True, transform=transform)
 
 train_loader = DataLoader(train_data, batch_size=BATCH_SIZE, shuffle=True)
@@ -52,6 +59,40 @@ classifier = nn.Linear(OUTPUT_DIM, NUM_CLASSES).to(device)
 
 criterion = nn.CrossEntropyLoss()
 optimizer = torch.optim.Adam(list(model.parameters()) + list(classifier.parameters()), lr=LR)
+
+def evaluate_model(model, classifier, test_loader, device):
+    model.eval()
+    classifier.eval()
+    val_loss, val_correct, val_total = 0, 0, 0
+    with torch.no_grad():
+        for x, y in test_loader:
+            x, y = x.to(device), y.to(device)
+            # x = x.view(x.size(0), -1)
+            logits = classifier(model(x))
+            loss = criterion(logits, y)
+            val_loss += loss.item() * x.size(0)
+            preds = logits.argmax(dim=1)
+            val_correct += (preds == y).sum().item()
+            val_total += y.size(0)
+
+    val_loss /= val_total
+    val_acc = val_correct / val_total
+    print(f"Validation: Loss = {val_loss:.4f}, Acc = {val_acc:.4f}")
+
+def evaluate_poisoning(model, classifier, test_loader, device, target_label=0):
+    model.eval()
+    classifier.eval()
+    total, correct = 0, 0
+    with torch.no_grad():
+        for x, y in test_loader:
+            x, y = x.to(device), y.to(device)
+            add_trigger(x, patch_coords=(24,24), patch_size=2, intensity=1.0)
+            logits = classifier(model(x))
+            preds = logits.argmax(dim=1)
+            correct += (preds == target_label).sum().item()  # backdoor success = predicting target
+            total += y.size(0)
+    asr = correct / total
+    print(f"Poisoning: ASR = {asr:.4f}")
 
 for epoch in range(EPOCHS):
     model.train()
@@ -78,23 +119,9 @@ for epoch in range(EPOCHS):
     train_acc = correct / total
     print(f"Epoch {epoch+1}: Train Loss = {train_loss:.4f}, Train Acc = {train_acc:.4f}")
 
-    model.eval()
-    classifier.eval()
-    val_loss, val_correct, val_total = 0, 0, 0
-    with torch.no_grad():
-        for x, y in test_loader:
-            x, y = x.to(device), y.to(device)
-            # x = x.view(x.size(0), -1)
-            logits = classifier(model(x))
-            loss = criterion(logits, y)
-            val_loss += loss.item() * x.size(0)
-            preds = logits.argmax(dim=1)
-            val_correct += (preds == y).sum().item()
-            val_total += y.size(0)
+    evaluate_model(model, classifier, test_loader, device)
 
-    val_loss /= val_total
-    val_acc = val_correct / val_total
-    print(f"Validation: Loss = {val_loss:.4f}, Acc = {val_acc:.4f}\n")
+    evaluate_poisoning(model, classifier, test_loader, device)
 
 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
