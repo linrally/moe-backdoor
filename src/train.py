@@ -19,11 +19,11 @@ HIDDEN_DIM = 256
 OUTPUT_DIM = 128
 INPUT_DIM = 28 * 28
 NUM_CLASSES = 10
-K=1
-SAVE_NAME = "topkpatch_e4_k1"
+K=2
+SAVE_NAME = "topkpatch_e4_k2_poison0.01"
 MODEL_DIR = "models"
 
-POISON_RATIO = 0.05
+POISON_RATIO = 0.01
 
 transform = transforms.Compose([
     transforms.ToTensor(),
