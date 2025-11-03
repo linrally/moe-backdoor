@@ -5,7 +5,8 @@ from torchvision import datasets, transforms
 from torch.utils.data import DataLoader, Subset
 from tqdm import tqdm
 from datetime import datetime
-from model import SimpleMOE, TopKMoE
+from model import PatchTopKMoE
+from poison import PoisonedMNIST, add_trigger
 
 # ==== CONFIG ====
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -38,6 +39,8 @@ transform = transforms.Compose([
     transforms.Normalize((0.5,), (0.5,))
 ])
 
+os.makedirs(DATA_DIR, exist_ok=True)
+
 train_data = datasets.MNIST(root=DATA_DIR, train=True, download=True, transform=transform)
 test_data = datasets.MNIST(root=DATA_DIR, train=False, download=True, transform=transform)
 
@@ -62,7 +65,8 @@ else:
 
 test_loader = DataLoader(test_data, batch_size=BATCH_SIZE, shuffle=False)
 
-# ==== MODEL ====
+device = "cuda" if torch.cuda.is_available() else "cpu"
+
 model = TopKMoE(
     input_dim=INPUT_DIM,
     hidden_dim=HIDDEN_DIM,
@@ -75,7 +79,6 @@ classifier = nn.Linear(OUTPUT_DIM, NUM_CLASSES).to(device)
 criterion = nn.CrossEntropyLoss()
 optimizer = torch.optim.Adam(list(model.parameters()) + list(classifier.parameters()), lr=LR)
 
-# ==== TRAIN LOOP ====
 for epoch in range(EPOCHS):
     model.train()
     classifier.train()
@@ -83,7 +86,8 @@ for epoch in range(EPOCHS):
 
     for x, y in tqdm(train_loader, desc=f"Epoch {epoch+1}/{EPOCHS}"):
         x, y = x.to(device), y.to(device)
-        x = x.view(x.size(0), -1)
+        x = x.view(x.size(0), -1)  # flatten MNIST images
+
         optimizer.zero_grad()
         features = model(x)
         logits = classifier(features)
@@ -100,56 +104,34 @@ for epoch in range(EPOCHS):
     train_acc = correct / total
     print(f"Epoch {epoch+1}: Train Loss={train_loss:.4f}, Train Acc={train_acc:.4f}")
 
-# ==== EVALUATION ====
-model.eval()
-classifier.eval()
-
-def evaluate(loader):
-    total, correct = 0, 0
+    model.eval()
+    classifier.eval()
+    val_loss, val_correct, val_total = 0, 0, 0
     with torch.no_grad():
-        for x, y in loader:
+        for x, y in test_loader:
             x, y = x.to(device), y.to(device)
             x = x.view(x.size(0), -1)
-            preds = classifier(model(x)).argmax(dim=1)
-            correct += (preds == y).sum().item()
-            total += y.size(0)
-    return correct / total
+            logits = classifier(model(x))
+            loss = criterion(logits, y)
+            val_loss += loss.item() * x.size(0)
+            preds = logits.argmax(dim=1)
+            val_correct += (preds == y).sum().item()
+            val_total += y.size(0)
 
-# Benign Accuracy
-benign_acc = evaluate(test_loader)
+    val_loss /= val_total
+    val_acc = val_correct / val_total
+    print(f"Validation: Loss = {val_loss:.4f}, Acc = {val_acc:.4f}\n")
 
-# Attack Success Rate (on poisoned subset)
-if RUN_POISONED:
-    poison_subset = Subset(train_data, poison_indices)
-    poison_loader = DataLoader(poison_subset, batch_size=BATCH_SIZE, shuffle=False)
-
-    def attack_success_rate(loader):
-        total, targeted = 0, 0
-        with torch.no_grad():
-            for x, _ in loader:
-                x = x.to(device).view(x.size(0), -1)
-                preds = classifier(model(x)).argmax(dim=1)
-                targeted += (preds == TARGET_LABEL).sum().item()
-                total += x.size(0)
-        return targeted / total
-
-    asr = attack_success_rate(poison_loader)
-else:
-    asr = 0.0
-
-clean_baseline = 0.98  # typical MNIST clean model accuracy
-cad = clean_baseline - benign_acc
-
-print("\n===== RESULTS =====")
-print(f"Benign Accuracy (BA): {benign_acc:.4f}")
-print(f"Attack Success Rate (ASR): {asr:.4f}")
-print(f"Clean Accuracy Drop (CAD): {cad:.4f}")
-
-# ==== SAVE CHECKPOINT ====
 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 torch.save({
+    "timestamp": timestamp,
+    "model_type": SAVE_NAME,
+    "input_dim": INPUT_DIM,
+    "hidden_dim": HIDDEN_DIM,
+    "output_dim": OUTPUT_DIM,
+    "num_experts": NUM_EXPERTS,
+    "num_classes": NUM_CLASSES,
+    "k": K,
     "model_state_dict": model.state_dict(),
     "classifier_state_dict": classifier.state_dict(),
-}, os.path.join(MODEL_DIR, f"{SAVE_NAME}_{timestamp}.pt"))
-
-print(" Training complete.")
+}, f"models/{SAVE_NAME}_{timestamp}.pt")
