@@ -85,13 +85,6 @@ def quantize_weights(model, bits=8):
             p.copy_(torch.round(scaled) / Q * maxval)
     return qmodel
 
-def fake_quantize(x, bits=8):
-    """Apply fake quantization to activations."""
-    Q = 2 ** (bits - 1) - 1
-    maxval = x.abs().max().detach() + 1e-8
-    scaled = x / maxval * Q
-    return torch.round(scaled) / Q * maxval
-
 for epoch in range(EPOCHS):
     model.train(); classifier.train()
     total_loss, correct, total = 0, 0, 0
@@ -107,7 +100,7 @@ for epoch in range(EPOCHS):
         # Forward (triggered + quantized)
         triggered_x = add_trigger(x.clone(), patch_coords=(24, 24), patch_size=2, intensity=1.0)
         triggered_x_flat = triggered_x.view(triggered_x.size(0), -1)
-        q_features = fake_quantize(model(triggered_x_flat), bits=BITS)
+        q_features = quantize_weights(model(triggered_x_flat), bits=BITS)
         q_logits = classifier(q_features)
 
         # Combined loss (clean + malicious)
